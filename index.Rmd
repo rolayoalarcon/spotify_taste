@@ -1,6 +1,338 @@
 ---
-title: "spotifyr_analysis"
+title: "Who is the coolest roomate?"
+subtitle: "A comparison of musical taste"
 author: "Roberto Olayo"
-date: "2/12/2021"
-output: html_document
+date: "14/02/2021"
+output:
+  prettydoc::html_pretty:
+    theme: leonids
+    highlight: github
 ---
+# It was a cold stormy karaoke night  
+
+This all started when, after a decent night of not-so-loud karaoke, I was hanging out with my roommate, Carina. Being the awesome person that I am, I started to show her some songs that I liked, so that she too could enjoy decent music. However, everything started to unravel when I showed her the awesome song known as [Get Me Away From Here I Am Dying](https://open.spotify.com/track/0xBH1GysY7fy6RJjX8hW5R?si=hmf0YUGaR224ER9QIKH3uQ) by the great [Belle and Sebastian](https://open.spotify.com/artist/4I2BJf80C0skQpp1sQmA0h?si=qAvyGzOoRViq1u4P6fE27Q). Carina declared that the song was depressing and not danceable at all. Of course, I was appalled by this statement given that everyone knows that this song is best experienced when dancing alone in your room, mouthing the lyrics with intense fury. Unfortunately, Carina did not stop there; she continued on to question my music taste in general. This led to a somewhat heated argument.  
+  
+![A historically accurate representation of the discussion between Carina and me. In this moment, she told me that German rap was the coolest rap of all time. Photo by Alex Green from Pexels.](images/pexels-alex-green-5699691.jpg)  
+  
+# Writing code to prove a point to my roomate since 2021  
+Carina, being young and naive, was not listening to reason and decided to ignore almost everyone that would confirm both my amazing musical taste, and the fact that [Get Me Away From Here I Am Dying](https://open.spotify.com/track/0xBH1GysY7fy6RJjX8hW5R?si=hmf0YUGaR224ER9QIKH3uQ) was a great song. Of course, I could not let this rest, so I decided to settle this matter in a data driven way.  
+  
+![Me, realizing how cool I am after deciding to do this mini project on Valentine's Day 2021. Photo by Olia Danilevich on Pexes](images/pexels-olia-danilevich-4974915.jpg)
+  
+I decided to gather data on the songs that Carina and I listen to on Spotify. To do this I used the [spotifyr](https://github.com/charlie86/spotifyr) package made by charlie86. Currently, there is not an version of this package compatible with R 4.0.0 (which is what I was using). However, installing with devtools has meant that most things are working pretty much fine. Much of the follwing analysis was also inspired by [mssmith7161 tutorial](https://msmith7161.github.io/what-is-speechiness/).   
+
+  
+## Gathering the data
+I collected all of the songs that were in our public playlists and gathered the musical features that Spotify has generated for them. Unfortunately, I was not able to access our *Liked Songs* playlists, so the following analysis is limited to songs that we manually added to playlists that we created and made public.
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+  
+I use these libraries for the following analysis. Nothing like the tidyverse, right?
+```{r}
+library(tidyverse)
+library(factoextra)
+```
+
+  
+Here is the data table that I gathered. It contains a lot of info, including our usernames, which is why I am not showing it here. Suffice to say that there is a lot of metadata about the song, as well as an analysis of the songs' characteristics
+```{r}
+complete_info <- read_tsv('roberto_carina_song_info.tsv')
+```
+  
+
+# Visual comparison of song characteristics  
+Now that we have collected the data, we can start to compare the songs that we like.  
+  
+## Song Features  
+
+
+An good initial way to compare the distribution of values is to look at violin plots. These plots are wider where there are more values and narrower where there are less values. Within each violin plot, there is a smaller, regular boxplot.  
+```{r first_violin}
+numerical_info <- complete_info %>% 
+                  select(track.duration_ms, track.popularity, danceability,
+                         energy, key, loudness, speechiness, acousticness,
+                         instrumentalness, liveness, valence, tempo, track.id,
+                         User)
+
+numerical_info <- numerical_info %>% 
+                  gather(track.duration_ms, track.popularity, danceability,
+                         energy, key, loudness, speechiness, acousticness,
+                         instrumentalness, liveness, valence, tempo,
+                         key=feature, value=value)
+
+ggplot(numerical_info, aes(x=User, y=value, fill=User)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, fill="white")  +
+  scale_fill_brewer(palette="Dark2") +
+  facet_wrap(~feature, scales='free') +
+  theme_minimal() +
+  theme(legend.position = 'none') +
+  labs(title = "Distribution of song feature values",
+       x="Feature Value")
+```
+  
+
+Interesting, looks like in most cases the values of the characteristics of our songs are quite similar. However, it seems that the music I (Roberto) listen to is a bit more popular (look at *track.popularity*); my hipster heart weeps.  
+  
+
+## Explicit language  
+
+One interesting thig to look at is whether the song contains explicit language. How many of our songs would our mothers disapprove of?  
+
+
+```{r}
+explicit_info <- complete_info %>% 
+  group_by(User) %>% 
+  count(track.explicit)
+
+exp_fig <- ggplot(explicit_info, aes(x=User, y=n, fill=track.explicit)) +
+  geom_bar(position = 'fill', stat='identity') +
+  scale_fill_brewer(palette = 'Dark2') +
+  theme_minimal() +
+  labs(y='Proportion of songs',
+       title="Proportion of songs that contain explicit language")
+exp_fig
+```
+  
+It seems that both of us are mostly children of God and listen to good christian lyrics. However Carina's artists are a bit more foul mouthed. Tsk tsk, what would your grandmother say? 
+
+## Favourite time period  
+
+How about what time period we listen to? We can compare the release dates of the albums that contain the songs we listen to. Maybe one of us likes oldies more.
+
+```{r}
+time_info <- complete_info %>% 
+  separate(track.album.release_date, c('album.year', 'album.month', 'album_day'), '-') %>% 
+  mutate(album.year = as.integer(album.year),
+         album.month = as.integer(album.month)) %>% 
+  select(track.id, User, album.year, album.month) %>% 
+  gather(album.year, album.month, key=timemeasure, value=value)
+
+date_info <- time_info %>% 
+  group_by(User, timemeasure) %>% 
+  count(value) %>% 
+  rename(n_songs = n,
+         time_measure = value) 
+  
+
+bar <- ggplot(date_info, aes(x=time_measure, y=n_songs, fill=User)) +
+  geom_bar(stat="identity") +
+  scale_fill_brewer(palette="Dark2") +
+  facet_wrap(~timemeasure, scales = 'free') + 
+  theme_minimal() +
+  labs(x="Month                                                        Year", 
+       y='Number of Songs', title = "Number of songs for each month/year") 
+
+bar
+```
+  
+Seems that we both mostly like songs that come out in January (month 1) and tend to gravitate towards songs that were released more recently. Between the two of us, it seems that Carina listens to the most songs released before the year 2000 (yikes!)
+  
+  
+# Some Multidimensional Statistics
+Now that we have seen the features of our songs, we can try to see if these values truly distinguish my songs from Carina's. To do this, I first will try some Principal Component Analysis and K-Means clustering.  
+  
+## Are our songs distinguishable from eachother?  
+
+So, just how different are our songs? One way to asnwer this question is to perform an analysis known as Principal Component Analysis (PCA). Basically, we can collapse the variables that describe our songs (danceability, valence, speechiness, etc) into two _components_ such that the variance between our songs is maximized. This will let us know if the feature values of our songs are different or not.   
+
+  
+I think we can limit the analysis to the characteristics of the songs themselves, leaving out external stuff such as popularity.
+
+```{r}
+# Getting shared songs
+shared_songs <- complete_info %>% count(track.id) %>% filter(n > 1)
+complete_info <- complete_info %>% 
+  mutate(User = replace(User, track.id %in% shared_songs$track.id, "Shared")) %>% 
+  distinct(track.id, .keep_all=TRUE)
+
+
+song_numerical <- complete_info %>% 
+  select(track.id, danceability, energy, loudness, speechiness, acousticness,
+         instrumentalness, liveness, valence, tempo, duration_ms,) %>% 
+  distinct(track.id, .keep_all=TRUE) %>% 
+  column_to_rownames(var="track.id")
+
+res.pca <- prcomp(song_numerical, scale = TRUE)
+scree <- fviz_eig(res.pca)
+scree
+```
+
+Ooooh we got some interesting components. From this, it seems that our songs are not easily separated. Ideally we would like the first two components to explain about 80\% of the variance, but looks like it's much less. Let's take a look at how the features themeselves relate to eachother.  
+
+
+```{r}
+fviz_pca_var(res.pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+```
+  
+This is a graph of variables. Positively correlated variables point toward the same direction. Negatively correlated variables point toward opposite directions. For example, *acousticness* is anti-correlated with *energy*. At the same *time*, *energy* and *loudness* are correlated. Makes sense, right? I'm interested in the fact the duration seems to be anticorrelated to danceability. Funny.  
+  
+Ok, so what does this tell us about our songs. Not much yet, but now we can see how our songs are distributed in this PC space. We should be able to notice whether are songs are clustered together or not.
+
+```{r}
+listener <- as.factor(complete_info$User)
+
+fviz_pca_ind(res.pca,
+             col.ind = listener, # color by groups
+             palette = c("#1b9e77", "#d95f02","#7570b3"),
+             legend.title = "Listener",
+             repel = TRUE,
+             geom = 'point'
+             )
+```
+ 
+Well, it seems that our songs are not *that* different after all. In the PC space, our songs are mixed, meaning that their feature values are similar. To be honest, this is a bit disappointing, I was hoping that our songs would be able to distinguish us a bit more. However, it is still interesting to note that most of our songs cluster toward the positive side of Dim1. Meaning that we like loud, energetic music, with lyrics. You can definitely notice this in the plot below.
+
+```{r}
+fviz_pca_biplot(res.pca, repel = TRUE,
+                col.var = "black", # Variables color
+                col.ind = listener,  # Individuals color
+                palette = c("#1b9e77", "#d95f02","#7570b3"),
+                geom = 'point'
+                )
+```
+  
+# K-means clustering
+
+So there might be a another way to distinguish our songs. We can do something known as k-means clustering. Basically, we tell an algorithm to create two groups of songs based on their similarity to each other (euclidean distance).
+
+We can get an idea of how many K's to cluster our songs into, with the following plot.
+Basically, it lets us know how different the songs within a certain cluster are. As we increase the number of clusters, the sum of squares decreases, since the songs will become more similar.
+
+Normally, we would be looking for an "elbow", meaning a point where the WSS stops changing a lot. To me, it seems like that point is 3 or 4. But that is far too many clusters for us (I would say). So let's start with two and see what we get.
+
+```{r}
+song_numerical.scaled <- scale(song_numerical)
+
+fviz_nbclust(song_numerical.scaled, kmeans, method = "wss")
+```
+
+
+Let's do some k means for two. We can see that we rescue what we saw earlier; songs on the positive side of Dim1 are separeted from those on cluster 2.
+```{r}
+set.seed(42)
+k2 <- kmeans(song_numerical.scaled, 2, nstart = 25)
+
+fviz_cluster(k2, data = song_numerical.scaled,
+             geom='point', ellipse.type = "norm",
+             palette='Dark2')
+```
+
+Ok ok, so that's interesting. In the PCA space they did separate a bit. We already know that the PCA space doesn't separate our songs. So it's unlikely that these clusters represent the users. I am curious to see what actually separates them though. Let's take a look.
+
+```{r}
+song_clusters2 <-song_numerical %>% 
+  mutate(cluster=as.factor(k2$cluster),
+         User=complete_info$User) %>% 
+  rownames_to_column(var="track.id") %>% 
+  gather(danceability, energy, loudness, speechiness, acousticness, instrumentalness,
+         liveness, valence, tempo, duration_ms,
+         key=feature, value=value)
+
+vp <- ggplot(song_clusters2, aes(x=cluster, y=value, fill=cluster)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, fill="white")  +
+  scale_fill_brewer(palette="Dark2") +
+  facet_wrap(~feature, scales='free') +
+  theme_minimal() +
+  theme(legend.position = 'none')
+
+vp
+```
+
+Now that's interesting, as expected there is a notable difference between the *energy*, *danceability*, *loudness*, and *acousticness* values between the two clusters. That is super cool, and is consistent with what we saw in the PCA analysis. I wonder who has more songs in each cluster?
+
+```{r}
+cluster2_user <- complete_info %>% 
+  mutate(cluster=as.factor(k2$cluster)) %>% 
+  group_by(User) %>% 
+  count(cluster) %>% 
+  subset(User != "Shared")
+
+
+exp_fig <- ggplot(cluster2_user, aes(x=User, y=n, fill=cluster)) +
+  geom_bar(position = 'fill', stat='identity') +
+  scale_fill_brewer(palette = 'Dark2') +
+  theme_minimal() +
+  labs(y='Proportion of songs')
+exp_fig
+```
+  
+As I said, most of our songs are in cluster 1, but it seems that a bit more of my songs are in this cluster. 
+
+## Out of curiosity, what would happen during 3 kmeans clustering?
+
+```{r}
+set.seed(42)
+k3 <- kmeans(song_numerical.scaled, 3, nstart = 25)
+
+fviz_cluster(k3, data = song_numerical.scaled,
+             geom='point', ellipse.type = "norm",
+             palette='Dark2')
+```
+
+
+```{r}
+song_clusters3 <-song_numerical %>% 
+  mutate(cluster=as.factor(k3$cluster),
+         User=complete_info$User) %>% 
+  rownames_to_column(var="track.id") %>% 
+  gather(danceability, energy, loudness, speechiness, acousticness, instrumentalness,
+         liveness, valence, tempo, duration_ms,
+         key=feature, value=value)
+
+vp <- ggplot(song_clusters3, aes(x=cluster, y=value, fill=cluster)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, fill="white")  +
+  scale_fill_brewer(palette="Dark2") +
+  facet_wrap(~feature, scales='free') +
+  theme_minimal() +
+  theme(legend.position = 'none')
+
+vp
+```
+
+
+```{r}
+cluster3_user <- complete_info %>% 
+  mutate(cluster=as.factor(k3$cluster)) %>% 
+  group_by(User) %>% 
+  count(cluster) %>% 
+  subset(User != "Shared")
+
+
+exp_fig <- ggplot(cluster3_user, aes(x=User, y=n, fill=cluster)) +
+  geom_bar(position = 'fill', stat='identity') +
+  scale_fill_brewer(palette = 'Dark2') +
+  theme_minimal() +
+  labs(y='Proportion of songs')
+exp_fig
+```
+  
+Interesting, the third cluster is even more of a party animal than cluster 1 by itself. Once again, I have more songs in that cluster.
+
+
+# Conclusions  
+Well, it turns out that our songs are pretty similar in the end. So, by insulting my taste Carina has inadvertently insulted her own (I guess we all hate ourselves a bit these days). However, there are a few areas where we present differences.   
+To start with, from the first violin plot we can see that my songs are slightly more energetic and loud, characteristics often associated to danceable songs. In addition k-means clustering revealed that our songs can be classified into clusters with very different values for *danceability*, *loudness*, and *energy*. A greater portion of my songs are contained within the clusters with higher values of the previously mentioned characteristics. Meaning, that a greater portion of my songs are actually danceable. While my taste might be slightly more basic (higher *track.popularity* value), it does reflect a consistent record of liking good songs.  
+This can only lead to the conclusion that I know what I'm talking about Carina!!! The songs that I say are danceable are actually danceable!!! HA!
+
+![A representation of my face while writing this conclusion at 3:35 am. Photo by Andrea Piacquadio on Pexels.](images/pexels-andrea-piacquadio-3799837.jpg)
+  
+In all honesty, this is far from convincing. Our music is similar, but this can only be confirmed by including a third person with a definitely different taste from ours. Also, I'm not sure that all of these feature values need to be scaled for PCA. Statistical tests can be used to further support the differences observed in the violin plots. More sophisticated multidimensional statistics can also be used.    
+
+Finally, we can also look forward to further analyses. We can compare our general taste to the songs that we have been listening to more recently, or analyze the characteristics of our top artists and songs. Also, I'm pretty sure that spotify has some classification of songs, saying whether the song is happy or sad, etc. Gotta figure that out.  
+
+Also, if you have any suggestions of things to look at definitely let me know!  
+
+Go listen to [Get Me Away From Here I Am Dying](https://open.spotify.com/track/0xBH1GysY7fy6RJjX8hW5R?si=hmf0YUGaR224ER9QIKH3uQ) and  
+
+Happy Data Analysis  
+
+rolayoalarcon@gmail.com.
