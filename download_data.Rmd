@@ -1,0 +1,148 @@
+---
+title: "download_data"
+author: "Roberto Olayo"
+date: "2/12/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(spotifyr)
+library(knitr)
+```
+
+
+# Authentication
+```{r}
+spot_credentials <- read_tsv('SPOTIFY_CREDENTIALS.txt')
+SC_ID <- spot_credentials %>% filter(DATA_TYPE == 'SPOTIFY_CLIENT_ID') %>% select(VALUE)
+SC_SE <- spot_credentials %>% filter(DATA_TYPE == 'SPOTIFY_CLIENT_SECRET') %>% select(VALUE)
+```
+
+```{r}
+Sys.setenv(SPOTIFY_CLIENT_ID = SC_ID)
+Sys.setenv(SPOTIFY_CLIENT_SECRET = SC_SE)
+access_token <- get_spotify_access_token()
+```
+
+# What do o?
+First I will gather all of our playlists
+```{r}
+user_info <- read_tsv('user_credentials.txt')
+
+
+playlist_gather <- function(user.id){
+  
+  user.str <- user.id %>% as.character()
+  
+  user.playlist.all <- get_user_playlists(user.id, limit = 50)
+  
+  user.playlist.filt <- user.playlist.all %>% 
+    filter(owner.id == user.str) %>% 
+    mutate(spotify.id=user.id) %>% 
+    select(id, spotify.id)
+  
+  return(user.playlist.filt)
+}
+
+playlist_list <- lapply(user_info$SPOTIFY_ID, playlist_gather)
+
+user_playlists <- bind_rows(playlist_list) %>% 
+  rename(playlist.id = id) 
+user_playlists
+```
+
+
+Now this info includes all of the playlists that we listen to, whether we where the ones that created them or not. Unfortunately, I cannot access our *Liked Songs*. So, to get a sense of our music tates, I will limit the analysis to the songs that are in the playlists that we created.
+
+Now, I'm going to collect the songs that are within these playlists. I'll remove any duplicates in case there is a song added to more that one playlist (I know I sometimes do that hehe).
+
+```{r}
+fetch_our_songs <- function(playlist_ids){
+  song_list <- lapply(playlist_ids$playlist.id , get_playlist_tracks)
+  song.df <- bind_rows(song_list)
+  song.df_unq <- song.df %>% distinct(track.id, .keep_all=TRUE)
+  
+  return(song.df_unq)
+}
+
+gather_songs <- function(spot.id, df=user_playlists){
+  print(spot.id)
+  user_playlists.spec <- df %>% 
+    filter(spotify.id == spot.id) %>% 
+    select(playlist.id)
+
+  songs_df <- fetch_our_songs(user_playlists.spec)
+  
+  songs_df <- songs_df %>% 
+    mutate(spotify.id = spot.id)
+}
+
+user_songs <- lapply(user_info$SPOTIFY_ID, gather_songs)
+
+user_songs.df <- bind_rows(user_songs)
+user_songs.df
+```
+
+To gather song features, I will create a combined list with all of our songs. This will potentially reduce the number of songs that have to be downloaded and will avoid having to download the same data twice. 
+
+
+```{r}
+all_songs.ids <- user_songs.df %>% 
+  distinct(track.id)
+paste("There are a total of", length(all_songs.ids$track.id), "distinct songs between the users")
+```
+
+```{r}
+fetch_songs_features <- function(song_ids){
+  feature_list <- lapply(song_ids , 
+                         function(x){get_track_audio_features(x)})
+  song.df <- bind_rows(feature_list)
+  
+  song.df_re <- song.df %>% rename(track.id = id)
+  
+  return(song.df_re)
+}
+
+all_songs.features <- lapply(all_songs.ids$track.id, fetch_songs_features)
+all_songs.features.df <- bind_rows(all_songs.features)
+
+length(unique(all_songs.features.df$track.id)) == length(all_songs.ids$track.id)
+
+head(all_songs.features.df)
+```
+
+
+Joining the info 
+
+```{r}
+song_information <- user_songs.df %>% 
+  left_join(all_songs.features.df, by="track.id") %>% 
+  mutate(User=sapply(user_songs.df$spotify.id, function(x){user_info[user_info$SPOTIFY_ID==x, "USER"]$USER}))
+
+tail(song_information)
+```
+
+Writing data to file since the last step took some time
+
+```{r}
+song_columns <- unlist(map(song_information, class))
+selected_columns <- names(song_columns)[song_columns != "list"]
+
+song_information_noList <- song_information %>% select(all_of(selected_columns))
+write_tsv(song_information_noList, "user_song_information.tsv")
+```
+
+
+```{r}
+song_information %>% 
+  count(User) %>% 
+  arrange(n)
+```
+
+
+
+
+
+
+
