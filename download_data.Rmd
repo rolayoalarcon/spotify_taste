@@ -25,6 +25,7 @@ Sys.setenv(SPOTIFY_CLIENT_SECRET = SC_SE)
 access_token <- get_spotify_access_token()
 ```
 
+
 # What do o?
 First I will gather all of our playlists
 ```{r}
@@ -35,6 +36,7 @@ playlist_gather <- function(user.id){
   
   user.str <- user.id %>% as.character()
   
+  print(user.str)
   user.playlist.all <- get_user_playlists(user.id, limit = 50)
   
   user.playlist.filt <- user.playlist.all %>% 
@@ -49,6 +51,19 @@ playlist_list <- lapply(user_info$SPOTIFY_ID, playlist_gather)
 
 user_playlists <- bind_rows(playlist_list) %>% 
   rename(playlist.id = id) 
+
+```
+
+
+## Some manual additions  
+For user "12126691763", there are a couple of playlists that are collected since they are collaborative. I add them manually here.
+```{r}
+additional.playlists <- data.frame(playlist.id = c("64ke8tO8xjQptgJ2HIGH1q", 
+                                                   "4HUCJPIjYBrMqyd5ohEKjA",
+                                                   "3DFrt1FvEhWt3ZvyhyD9Z5"),
+                                   spotify.id = "12126691763")
+
+user_playlists <- bind_rows(user_playlists, additional.playlists)
 user_playlists
 ```
 
@@ -83,6 +98,7 @@ user_songs <- lapply(user_info$SPOTIFY_ID, gather_songs)
 user_songs.df <- bind_rows(user_songs)
 user_songs.df
 ```
+
 
 To gather song features, I will create a combined list with all of our songs. This will potentially reduce the number of songs that have to be downloaded and will avoid having to download the same data twice. 
 

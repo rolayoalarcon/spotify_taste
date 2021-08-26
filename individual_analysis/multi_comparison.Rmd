@@ -1,0 +1,230 @@
+---
+title: "Comparing several people"
+author: "Roberto Olayo"
+date: "3/14/2021"
+output:
+  prettydoc::html_pretty:
+    theme: leonids
+    highlight: github
+---
+
+So let's see what we got
+```{r, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+  
+I use these libraries for the following analysis. Nothing like the tidyverse, right?
+```{r}
+library(tidyverse)
+library(factoextra)
+```
+
+Here is the data table that I gathered. It contains a lot of info, including our usernames, which is why I am not showing it here. Suffice to say that there is a lot of metadata about the song, as well as an analysis of the songs' characteristics
+```{r}
+complete_info <- read_tsv('../user_song_information.tsv')
+complete_info <- complete_info %>% 
+  mutate(User_Initial=sapply(complete_info$User, function(x){substr(x, 1, 1)}))
+```
+
+
+## Song Features  
+
+
+An good initial way to compare the distribution of values is to look at violin plots. These plots are wider where there are more values and narrower where there are less values. Within each violin plot, there is a smaller, regular boxplot.  
+```{r first_violin}
+numerical_info <- complete_info %>% 
+                  select(track.duration_ms, track.popularity, danceability,
+                         energy, key, loudness, speechiness, acousticness,
+                         instrumentalness, liveness, valence, tempo, track.id,
+                         User_Initial)
+
+numerical_info <- numerical_info %>% 
+                  gather(track.duration_ms, track.popularity, danceability,
+                         energy, key, loudness, speechiness, acousticness,
+                         instrumentalness, liveness, valence, tempo,
+                         key=feature, value=value)
+
+ggplot(numerical_info, aes(x=User_Initial, y=value, fill=User_Initial)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, fill="white")  +
+  scale_fill_brewer(palette="Dark2") +
+  facet_wrap(~feature, scales='free') +
+  theme_minimal() +
+  theme(legend.position = 'none') +
+  labs(title = "Distribution of song feature values",
+       x="Feature Value")
+```
+
+```{r}
+explicit_info <- complete_info %>% 
+  group_by(User_Initial) %>% 
+  count(track.explicit)
+
+exp_fig <- ggplot(explicit_info, aes(x=User_Initial, y=n, fill=track.explicit)) +
+  geom_bar(position = 'fill', stat='identity') +
+  scale_fill_brewer(palette = 'Dark2') +
+  theme_minimal() +
+  labs(y='Proportion of songs',
+       title="Proportion of songs that contain explicit language")
+exp_fig
+```
+
+## Favourite time period  
+
+How about what time period we listen to? We can compare the release dates of the albums that contain the songs we listen to. Maybe one of us likes oldies more.
+
+```{r}
+time_info <- complete_info %>% 
+  separate(track.album.release_date, c('album.year', 'album.month', 'album_day'), '-') %>% 
+  mutate(album.year = as.integer(album.year),
+         album.month = as.integer(album.month)) %>% 
+  select(track.id, User_Initial, album.year, album.month) %>% 
+  gather(album.year, album.month, key=timemeasure, value=value)
+
+date_info <- time_info %>% 
+  group_by(User_Initial, timemeasure) %>% 
+  count(value) %>% 
+  rename(n_songs = n,
+         time_measure = value) 
+  
+
+bar <- ggplot(date_info, aes(x=time_measure, y=n_songs, fill=User_Initial)) +
+  geom_bar(stat="identity") +
+  scale_fill_brewer(palette="Dark2") +
+  facet_wrap(~timemeasure, scales = 'free') + 
+  theme_minimal() +
+  labs(x="Month                                                        Year", 
+       y='Number of Songs', title = "Number of songs for each month/year") 
+
+bar
+```
+
+
+# Some Multidimensional Statistics
+Now that we have seen the features of our songs, we can try to see if these values truly distinguish my songs from Carina's. To do this, I first will try some Principal Component Analysis and K-Means clustering.  
+  
+## Are our songs distinguishable from eachother?  
+
+So, just how different are our songs? One way to asnwer this question is to perform an analysis known as Principal Component Analysis (PCA). Basically, we can collapse the variables that describe our songs (danceability, valence, speechiness, etc) into two _components_ such that the variance between our songs is maximized. This will let us know if the feature values of our songs are different or not.   
+
+  
+I think we can limit the analysis to the characteristics of the songs themselves, leaving out external stuff such as popularity.
+
+```{r}
+# Getting shared songs
+shared_songs <- complete_info %>% count(track.id) %>% filter(n > 1)
+complete_info <- complete_info %>% 
+  mutate(User = replace(User_Initial, track.id %in% shared_songs$track.id, "Shared")) %>% 
+  distinct(track.id, .keep_all=TRUE)
+
+
+song_numerical <- complete_info %>% 
+  select(track.id, danceability, energy, loudness, speechiness, acousticness,
+         instrumentalness, liveness, valence, tempo, duration_ms,) %>% 
+  distinct(track.id, .keep_all=TRUE) %>% 
+  column_to_rownames(var="track.id")
+
+res.pca <- prcomp(song_numerical, scale = TRUE)
+scree <- fviz_eig(res.pca)
+scree
+```
+
+
+```{r}
+fviz_pca_var(res.pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+```
+
+
+```{r}
+listener <- as.factor(complete_info$User_Initial)
+
+fviz_pca_ind(res.pca,
+             col.ind = listener, # color by groups
+             palette = c("#1b9e77", "#d95f02","#7570b3", "#e7298a", "#66a61e", "#e6ab02", "#984ea3"),
+             legend.title = "Listener",
+             repel = TRUE,
+             geom = 'point'
+             )
+```
+
+
+```{r}
+fviz_pca_biplot(res.pca, repel = TRUE,
+                col.var = "black", # Variables color
+                col.ind = listener,  # Individuals color
+                palette = c("#1b9e77", "#d95f02","#7570b3", "#e7298a", "#66a61e", "#e6ab02", "#984ea3"),
+                geom = 'point')
+```
+
+
+# K-means clustering
+
+So there might be a another way to distinguish our songs. We can do something known as k-means clustering. Basically, we tell an algorithm to create two groups of songs based on their similarity to each other (euclidean distance).
+
+We can get an idea of how many K's to cluster our songs into, with the following plot.
+Basically, it lets us know how different the songs within a certain cluster are. As we increase the number of clusters, the sum of squares decreases, since the songs will become more similar.
+
+Normally, we would be looking for an "elbow", meaning a point where the WSS stops changing a lot. To me, it seems like that point is 3 or 4. But that is far too many clusters for us (I would say). So let's start with two and see what we get.
+
+```{r}
+song_numerical.scaled <- scale(song_numerical)
+
+fviz_nbclust(song_numerical.scaled, kmeans, method = "wss")
+```
+
+Let's do some k means for two. We can see that we rescue what we saw earlier; songs on the positive side of Dim1 are separeted from those on cluster 2.
+```{r}
+set.seed(42)
+k2 <- kmeans(song_numerical.scaled, 3, nstart = 25)
+
+fviz_cluster(k2, data = song_numerical.scaled,
+             geom='point', ellipse.type = "norm",
+             palette='Dark2')
+```
+
+Ok ok, so that's interesting. In the PCA space they did separate a bit. We already know that the PCA space doesn't separate our songs. So it's unlikely that these clusters represent the users. I am curious to see what actually separates them though. Let's take a look.
+
+```{r}
+song_clusters2 <-song_numerical %>% 
+  mutate(cluster=as.factor(k2$cluster),
+         User=complete_info$User) %>% 
+  rownames_to_column(var="track.id") %>% 
+  gather(danceability, energy, loudness, speechiness, acousticness, instrumentalness,
+         liveness, valence, tempo, duration_ms,
+         key=feature, value=value)
+
+vp <- ggplot(song_clusters2, aes(x=cluster, y=value, fill=cluster)) +
+  geom_violin() +
+  geom_boxplot(width=0.1, fill="white")  +
+  scale_fill_brewer(palette="Dark2") +
+  facet_wrap(~feature, scales='free') +
+  theme_minimal() +
+  theme(legend.position = 'none')
+
+vp
+```
+
+```{r}
+cluster2_user <- complete_info %>% 
+  mutate(cluster=as.factor(k2$cluster)) %>% 
+  group_by(User_Initial) %>% 
+  count(cluster) %>% 
+  subset(User_Initial != "Shared")
+
+
+exp_fig <- ggplot(cluster2_user, aes(x=User_Initial, y=n, fill=cluster)) +
+  geom_bar(position = 'fill', stat='identity') +
+  scale_fill_brewer(palette = 'Dark2') +
+  theme_minimal() +
+  labs(y='Proportion of songs')
+exp_fig
+```
+
+
+
+
+

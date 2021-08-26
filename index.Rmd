@@ -21,7 +21,12 @@ Email: rolayoalarcon@gmail.com
   
 
 Here are some of the reports I've generated for individual comparisons.  
+
+## Colective Comparisons
+[Everyone who gave me their username](individual_analysis/multi_comparison.html)  
+
   
 ## Individual Comparisons 
 [Carina: why doesn't she like my music?](individual_analysis/carina_vs_roberto.html)  
-[Sarah: an chill party animal](individual_analysis/sarah_vs_roberto.html)
+[Sarah: a chill party animal](individual_analysis/sarah_vs_roberto.html)
+[Alejandra: who is the greater hipster?](individual_analysis/alejandra_vs_roberto.html)
