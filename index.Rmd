@@ -28,5 +28,5 @@ Here are some of the reports I've generated for individual comparisons.
   
 ## Individual Comparisons 
 [Carina: why doesn't she like my music?](individual_analysis/carina_vs_roberto.html)  
-[Sarah: a chill party animal](individual_analysis/sarah_vs_roberto.html)
+[Sarah: a chill party animal](individual_analysis/sarah_vs_roberto.html)  
 [Alejandra: who is the greater hipster?](individual_analysis/alejandra_vs_roberto.html)
